@@ -69,7 +69,7 @@ In the above algorithm, the number of threads t is to be set such that each thre
 ALGORITHM 2. Preliminary Concurrent k-NN (Pre-CBF-kNN) Input: Data point q, R-tree R, k, Number of threads t, Concurrent Priority Queue RQ
 Output: k nearest neighbors of q stored in RQ
 Initialize Empty Concurrent Priority Queue CPQ; // shared by all t threads
-Add root of the R-tree R into CPQ along with its minDist as key; for each thread tj | i = 0 .. t — 1 in parallel
+Add root of the R-tree R into CPQ along with its minDist as key; for each thread ti | i = 0 .. t — 1 in parallel
   int i = 1;
   repeat
     element ele = removeMin(CPQ);
@@ -97,18 +97,20 @@ as a priority queue which stores lists of elements at its nodes, thus keeping th
 In this subsection we present the complete CBF-kNN algorithm. The motivation behind the design of CBF-kNN comes from the limitations of Pre-CBF-kNN. The performance analysis presented in Section 5 clearly show how Pre-CBF-kNN performs better than its sequential counterpart, but only up to 6 threads (See Figure 5). This confirms the claim in [18] that priority queues do not scale beyond a few threads at mixed workloads. Our design of CBF- kNN overcomes this problem by using tree-parallel mode of execution. CBF-kNN uses multiple priority queues in a tree parallel fashion wherein only a fixed number of threads c contend at every priority queue. Figure 4 illustrates this for c = 4 and three levels. Every priority queue at the bottom most level (3rd level in this case) is associated with c threads and the results of each of these are merged at a priority queue at its parent level in parallel. In this way the results are merged hierarchically wherein, exactly c threads contend at every priority queue. This flow can be extended to any number of levels depending on the data size and availability of processor cores.
 Algorithm 3 presents the pseudo code of CBF-kNN. Let the number of threads be p. Let, the number of threads contending at every priority queue be c. Initially the data is partitioned into p/c
 ALGORITHM 3. Concurrent k-NN (CBF-kNN)
-Input: Data point q, k, constant c, no of threads p Output: k nearest neighbors of q
-Divide the data into p/c partitions: {PART? | i = 0 .. (p/c - 1)};
+Input: Data point q, k, constant c, no of threads p
+Output: k nearest neighbors of q
+Divide the data into p/c partitions:{PARTi|i = 0 .. (p/c - 1)};
 // Now initializing empty concurrent priority queues and constructing R-trees for every partition...
-for each thread Pj | i = 0 .. (p/c — 1) in parallel for p/c data partitions
-Initialize an empty concurrent priority queue RQi for this data partition (RQi | i = 0 .. (p/c — 1)}; // (global)
-Initialize an empty R-tree RT; for this data partition {RT; | i = 0 .. (p/c — 1)}; // (global)
-   Insert all the data points lying in this partition into RT;;
+for each thread Pi|i = 0 .. (p/c — 1) in parallel for p/c data partitions
+Initialize an empty concurrent priority queue RQi for this data partition {RQi |i = 0 .. (p/c — 1)}; // (global)
+Initialize an empty R-tree RTi; for this data partition {RTi;|i = 0 .. (p/c — 1)}; // (global)
+Insert all the data points lying in this partition into RTi;
 end parallel for
-for each data partition PART; | i = 0 .. (p/c — 1)} in parallel
-// assign c threads to each partition and execute Pre-CBF-kNN Pre-CBF-KNN(q, RT;, k, c,RQ;);
+for each data partition PARTi|i = 0 .. (p/c — 1)} in parallel
+//assign c threads to each partition and execute Pre-CBF-kNN
+Pre-CBF-KNN(q, RTi, k, c,RQi);
 end parallel
-merge all RQ; for i = 0 ..p/c — 1 by parallel reduction with p/c threads;
+merge all RQi for i=0 .. p/c — 1 by parallel reduction with p/c threads;
 Report the top k elements in the topmost priority queue PQ0 as k nearest neighbors;
 partitions {PARTi | i = 0 .. (p/c - 1)}. For every partition PARTi in parallel, an empty concurrent priority queue {RQi | i = 0 .. (p/c - 1)} and an empty R-tree {RTi | i = 0 .. (p/c - 1)} are initialized. The data points that belong to each partition are then inserted into their respective R-trees. Now for each partition PARTi, c threads are assigned and Pre-CBF-kNN (Algorithm 2) is executed. k- nearest neighbors for each partition are computed by this and the results are stored in their respective result priority queues RQi. Then all the result priority queues are merged by parallel reduction with p/c threads. The top k elements in the topmost priority queue are returned as k nearest neighbors.
 4.4 Complexity Analysis
