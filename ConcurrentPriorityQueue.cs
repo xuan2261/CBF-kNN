@@ -15,128 +15,190 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 
-public class ConcurrentPriorityQueue<T> where T : IComparable<T>
+namespace DemokNNRtree
 {
-    private readonly List<List<T>> mound;
-    private readonly object lockObject = new object();
-
-    public ConcurrentPriorityQueue()
+    public class ConcurrentPriorityQueue<T> where T : IComparable<T>
     {
-        mound = new List<List<T>>();
-    }
+        private readonly List<List<T>> mound;
+        private readonly object lockObject = new object();
 
-    public void Insert(T item)
-    {
-        lock (lockObject)
+        public ConcurrentPriorityQueue()
         {
-            int index = BinarySearch(item);
-            if (index < 0)
-                index = ~index;
+            mound = new List<List<T>>();
+        }
 
-            if (index >= mound.Count)
+        public void Insert(T item)
+        {
+            lock (lockObject)
             {
-                mound.Add(new List<T>() { item });
-            }
-            else
-            {
-                mound[index].Add(item);
-                Moundify(index);
-            }
+                int index = BinarySearch(item);
+                if (index < 0)
+                    index = ~index;
 
-            Monitor.PulseAll(lockObject);
-        }
-    }
+                if (index >= mound.Count)
+                {
+                    mound.Add(new List<T>() { item });
+                }
+                else
+                {
+                    mound[index].Add(item);
+                    Moundify(index);
+                }
 
-    public bool TryExtractMin(out T result)
-    {
-        lock (lockObject)
-        {
-            while (mound.Count == 0 || mound[0].Count == 0)
-                Monitor.Wait(lockObject);
-
-            result = mound[0][0];
-            mound[0].RemoveAt(0);
-            if (mound[0].Count == 0)
-                mound.RemoveAt(0);
-
-            return true;
-        }
-    }
-
-    public bool TryTop(out T result)
-    {
-        lock (lockObject)
-        {
-            while (mound.Count == 0 || mound[0].Count == 0)
-                Monitor.Wait(lockObject);
-
-            result = mound[0][0];
-            return true;
-        }
-    }
-
-    public bool TryRemoveMin(out T result)
-    {
-        lock (lockObject)
-        {
-            while (mound.Count == 0 || mound[0].Count == 0)
-                Monitor.Wait(lockObject);
-
-            result = mound[0][0];
-            mound[0].RemoveAt(0);
-            if (mound[0].Count == 0)
-                mound.RemoveAt(0);
-
-            return true;
-        }
-    }
-
-    private int BinarySearch(T item)
-    {
-        int left = 0;
-        int right = mound.Count - 1;
-
-        while (left <= right)
-        {
-            int mid = left + (right - left) / 2;
-            int compareResult = item.CompareTo(mound[mid][0]);
-
-            if (compareResult == 0)
-                return mid;
-            if (compareResult < 0)
-                right = mid - 1;
-            else
-                left = mid + 1;
-        }
-
-        return ~left;
-    }
-
-    private void Moundify(int index)
-    {
-        while (index > 0)
-        {
-            int parentIndex = (index - 1) / 2;
-
-            if (mound[index][0].CompareTo(mound[parentIndex][0]) < 0)
-            {
-                Swap(index, parentIndex);
-                index = parentIndex;
-            }
-            else
-            {
-                break;
+                Monitor.PulseAll(lockObject);
             }
         }
-    }
 
-    private void Swap(int i, int j)
-    {
-        List<T> temp = mound[i];
-        mound[i] = mound[j];
-        mound[j] = temp;
+        public bool TryExtractMin(out T result)
+        {
+            lock (lockObject)
+            {
+                while (mound.Count == 0 || mound[0].Count == 0)
+                    Monitor.Wait(lockObject);
+
+                result = mound[0][0];
+                mound[0].RemoveAt(0);
+                if (mound[0].Count == 0)
+                    mound.RemoveAt(0);
+
+                return true;
+            }
+        }
+
+        public bool TryExtractMax(out T result)
+        {
+            lock (lockObject)
+            {
+                while (mound.Count == 0 || mound[0].Count == 0)
+                    Monitor.Wait(lockObject);
+
+                result = mound[0][mound[0].Count - 1];
+                mound[0].RemoveAt(mound[0].Count - 1);
+                if (mound[0].Count == 0)
+                    mound.RemoveAt(0);
+
+                return true;
+            }
+        }
+
+        public void MergeWith(ConcurrentPriorityQueue<T> otherQueue)
+        {
+            lock (lockObject)
+            {
+                foreach (var list in otherQueue.mound)
+                {
+                    if (list.Count > 0)
+                    {
+                        int index = BinarySearch(list[0]);
+                        if (index < 0)
+                            index = ~index;
+
+                        if (index >= mound.Count)
+                        {
+                            mound.Add(list);
+                        }
+                        else
+                        {
+                            mound[index].AddRange(list);
+                            Moundify(index);
+                        }
+                    }
+                }
+
+                Monitor.PulseAll(lockObject);
+            }
+        }
+
+        public T[] ToArray()
+        {
+            lock (lockObject)
+            {
+                List<T> result = new List<T>();
+                foreach (var list in mound)
+                {
+                    result.AddRange(list);
+                }
+                return result.ToArray();
+            }
+        }
+
+        public bool TryTop(out T result)
+        {
+            lock (lockObject)
+            {
+                while (mound.Count == 0 || mound[0].Count == 0)
+                    Monitor.Wait(lockObject);
+
+                result = mound[0][0];
+                return true;
+            }
+        }
+
+        public bool TryRemoveMin(out T result)
+        {
+            lock (lockObject)
+            {
+                while (mound.Count == 0 || mound[0].Count == 0)
+                    Monitor.Wait(lockObject);
+
+                result = mound[0][0];
+                mound[0].RemoveAt(0);
+                if (mound[0].Count == 0)
+                    mound.RemoveAt(0);
+
+                return true;
+            }
+        }
+
+        private int BinarySearch(T item)
+        {
+            int left = 0;
+            int right = mound.Count - 1;
+
+            while (left <= right)
+            {
+                int mid = left + (right - left) / 2;
+                int compareResult = item.CompareTo(mound[mid][0]);
+
+                if (compareResult == 0)
+                    return mid;
+                if (compareResult < 0)
+                    right = mid - 1;
+                else
+                    left = mid + 1;
+            }
+
+            return ~left;
+        }
+
+        private void Moundify(int index)
+        {
+            while (index > 0)
+            {
+                int parentIndex = (index - 1) / 2;
+
+                if (mound[index][0].CompareTo(mound[parentIndex][0]) < 0)
+                {
+                    Swap(index, parentIndex);
+                    index = parentIndex;
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
+
+        private void Swap(int i, int j)
+        {
+            List<T> temp = mound[i];
+            mound[i] = mound[j];
+            mound[j] = temp;
+        }
     }
 }
+
+
 
 //Đây là một lớp ConcurrentPriorityQueue đã được sửa đổi. Lớp này triển khai một hàng đợi ưu tiên có khả năng đồng thời (concurrent) cho các phương thức chèn, truy xuất và xóa phần tử.
 
